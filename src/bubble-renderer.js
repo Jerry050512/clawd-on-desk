@@ -80,6 +80,7 @@ const BUBBLE_STRINGS = {
     kimiPermission: "Kimi Permission",
     checkKimiTerminal: "Approve or reject this request in the Kimi terminal.",
     gotIt: "Got it",
+    reminder: "Reminder",
     planReview: "Plan Review",
     approve: "Approve",
     reject: "Reject",
@@ -115,6 +116,7 @@ const BUBBLE_STRINGS = {
     kimiPermission: "Kimi \u6743\u9650\u8BF7\u6C42",
     checkKimiTerminal: "\u8BF7\u5728 Kimi \u7EC8\u7AEF\u4E2D\u6279\u51C6\u6216\u62D2\u7EDD\u8BE5\u8BF7\u6C42\u3002",
     gotIt: "\u77E5\u9053\u4E86",
+    reminder: "\u63D0\u9192",
     planReview: "\u8BA1\u5212\u5BA1\u6279",
     approve: "\u6279\u51C6",
     reject: "\u62D2\u7EDD",
@@ -150,6 +152,7 @@ const BUBBLE_STRINGS = {
     kimiPermission: "Kimi 權限請求",
     checkKimiTerminal: "請在 Kimi 終端機中允許或拒絕此請求。",
     gotIt: "了解",
+    reminder: "提醒",
     planReview: "計畫審查",
     approve: "允許",
     reject: "拒絕",
@@ -185,6 +188,7 @@ const BUBBLE_STRINGS = {
     kimiPermission: "Kimi \uAD8C\uD55C \uC694\uCCAD",
     checkKimiTerminal: "Kimi \uD130\uBBF8\uB110\uC5D0\uC11C \uC774 \uC694\uCCAD\uC744 \uD5C8\uC6A9\uD558\uAC70\uB098 \uAC70\uBD80\uD558\uC138\uC694.",
     gotIt: "\uD655\uC778",
+    reminder: "\uC54C\uB9BC",
     planReview: "\uACC4\uD68D \uAC80\uD1A0",
     approve: "\uC2B9\uC778",
     reject: "\uAC70\uBD80",
@@ -220,6 +224,7 @@ const BUBBLE_STRINGS = {
     kimiPermission: "Kimi 権限リクエスト",
     checkKimiTerminal: "Kimi ターミナルでこのリクエストを許可または拒否してください。",
     gotIt: "了解",
+    reminder: "リマインダー",
     planReview: "計画レビュー",
     approve: "承認",
     reject: "却下",
@@ -772,6 +777,21 @@ function show(data) {
       suggestionsContainer.appendChild(btn);
     }
 
+    revealCard();
+    return;
+  }
+
+  // Reminder mode
+  if (data.toolName === "Reminder") {
+    headerTitle.textContent = bubbleText(data.lang, "reminder");
+    toolPillText.textContent = "TIMER";
+    toolPill.setAttribute("data-tool", "Reminder");
+    toolPill.style.display = "";
+    commandBlock.textContent = (data.toolInput && data.toolInput.command) || bubbleText(data.lang, "reminderTimeUp");
+    btnAllow.textContent = bubbleText(data.lang, "gotIt");
+    btnAllow.disabled = false;
+    btnDeny.style.display = "none";
+    suggestionsContainer.innerHTML = "";
     revealCard();
     return;
   }

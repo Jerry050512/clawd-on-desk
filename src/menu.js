@@ -203,6 +203,23 @@ module.exports = function initMenu(ctx) {
           if (typeof ctx.openDashboard === "function") ctx.openDashboard();
         },
       },
+      {
+        label: t("reminders"),
+        submenu: [
+          {
+            label: t("addTimer"),
+            click: () => {
+              if (typeof ctx.addTimerViaMenu === "function") ctx.addTimerViaMenu(t);
+            },
+          },
+          {
+            label: t("addAlarm"),
+            click: () => {
+              if (typeof ctx.addAlarmViaMenu === "function") ctx.addAlarmViaMenu(t);
+            },
+          },
+        ],
+      },
       buildAutoApproveMenuItem(),
     ];
 
@@ -415,6 +432,23 @@ module.exports = function initMenu(ctx) {
         click: () => {
           if (typeof ctx.openDashboard === "function") ctx.openDashboard();
         },
+      },
+      {
+        label: t("reminders"),
+        submenu: [
+          {
+            label: t("addTimer"),
+            click: () => {
+              if (typeof ctx.addTimerViaMenu === "function") ctx.addTimerViaMenu(t);
+            },
+          },
+          {
+            label: t("addAlarm"),
+            click: () => {
+              if (typeof ctx.addAlarmViaMenu === "function") ctx.addAlarmViaMenu(t);
+            },
+          },
+        ],
       },
       {
         label: t("newSession"),
