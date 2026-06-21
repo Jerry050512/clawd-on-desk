@@ -222,7 +222,7 @@ function buildCopilotPermissionResponseBody(decisionOrBehavior, message) {
 }
 
 function isPassiveNotifyEntry(permEntry) {
-  return !!(permEntry && (permEntry.isCodexNotify || permEntry.isKimiNotify));
+  return !!(permEntry && (permEntry.isCodexNotify || permEntry.isKimiNotify || permEntry.isReminderNotify));
 }
 
 function computePassiveNotifyRemainingMs(createdAt, autoCloseMs, now = Date.now()) {
@@ -885,7 +885,7 @@ function isRemoteRichApprovalSupported(permEntry) {
 
 function isRemoteApprovalActionable(permEntry) {
   if (!permEntry || typeof permEntry !== "object") return false;
-  if (permEntry.isElicitation || permEntry.isCodexNotify || permEntry.isKimiNotify || permEntry.isOpencode || permEntry.isAntigravity || permEntry.isCopilotCli) return false;
+  if (permEntry.isElicitation || permEntry.isCodexNotify || permEntry.isKimiNotify || permEntry.isReminderNotify || permEntry.isOpencode || permEntry.isAntigravity || permEntry.isCopilotCli) return false;
   if (permEntry.toolName === "ExitPlanMode" || permEntry.toolName === "AskUserQuestion") return false;
   if (PASSTHROUGH_TOOLS.has(permEntry.toolName)) return false;
   // Headless sessions auto-deny locally; mirror that on the Telegram side so a
@@ -1678,9 +1678,40 @@ function showKimiNotifyBubble({ sessionId, command }) {
   schedulePassiveNotifyAutoExpire(permEntry, policy.autoCloseMs);
 }
 
+function shouldSuppressReminderNotifyBubble(ctx) {
+  if (ctx.doNotDisturb) return true;
+  const policy = getPolicy(ctx, "notification");
+  return !policy.enabled;
+}
+
+function showReminderBubble({ sessionId, message }) {
+  if (shouldSuppressReminderNotifyBubble(ctx)) {
+    const policy = getPolicy(ctx, "notification");
+    permLog(`reminder notify suppressed: session=${sessionId} dnd=${ctx.doNotDisturb} notificationEnabled=${policy.enabled}`);
+    return;
+  }
+  const policy = getPolicy(ctx, "notification");
+  const permEntry = {
+    res: null,
+    abortHandler: null, suggestions: [],
+    sessionId, bubble: null, hideTimer: null,
+    toolName: "Reminder",
+    toolInput: { command: message || "Time's up!" },
+    resolvedSuggestion: null, createdAt: Date.now(),
+    isElicitation: false, isReminderNotify: true,
+    agentId: "timer",
+    autoExpireTimer: null,
+  };
+  addPendingPermission(permEntry, "passive-added");
+  showPermissionBubble(permEntry);
+  permLog(`passive notify show: agent=timer session=${sessionId} autoCloseMs=${policy.autoCloseMs}`);
+  schedulePassiveNotifyAutoExpire(permEntry, policy.autoCloseMs);
+}
+
 function getPassiveNotifyAgentId(permEntry) {
   if (permEntry?.isCodexNotify) return "codex";
   if (permEntry?.isKimiNotify) return "kimi-cli";
+  if (permEntry?.isReminderNotify) return "timer";
   return permEntry?.agentId || "unknown";
 }
 
@@ -1889,6 +1920,7 @@ return {
   handleBubbleHeight, handleDecide, cleanup,
   showCodexNotifyBubble, clearCodexNotifyBubbles,
   showKimiNotifyBubble, clearKimiNotifyBubbles,
+  showReminderBubble,
   refreshPassiveNotifyAutoClose,
   refreshPermissionAutoCloseForPolicy,
   dismissPermissionsByAgent, dismissInteractivePermissionBubbles,

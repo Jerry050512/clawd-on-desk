@@ -120,6 +120,7 @@ const createThemeRuntime = require("./theme-runtime");
 const createAgentRuntimeMain = require("./agent-runtime-main");
 const createFloatingWindowRuntime = require("./floating-window-runtime");
 const createPetWindowRuntime = require("./pet-window-runtime");
+const createTimerRuntime = require("./timer-runtime");
 const createMacHideController = require("./mac-hide");
 const { createHardwareBuddyAdapter } = require("./hardware-buddy-adapter");
 const {
@@ -288,6 +289,7 @@ function _restartClawdNow() {
 }
 
 let shortcutRuntime = null;
+let timerRuntime = null;
 let themeRuntime = null;
 let agentRuntime = null;
 let floatingWindowRuntime = null;
@@ -1239,7 +1241,7 @@ const _permCtx = {
   },
 };
 const _perm = initPermission(_permCtx);
-const { showPermissionBubble, resolvePermissionEntry, sendPermissionResponse, repositionBubbles, permLog, PASSTHROUGH_TOOLS, addPendingPermission, removePendingPermission, maybeStartRemoteApproval, showCodexNotifyBubble, clearCodexNotifyBubbles, showKimiNotifyBubble, clearKimiNotifyBubbles, syncPermissionShortcuts, replyOpencodePermission } = _perm;
+const { showPermissionBubble, resolvePermissionEntry, sendPermissionResponse, repositionBubbles, permLog, PASSTHROUGH_TOOLS, addPendingPermission, removePendingPermission, maybeStartRemoteApproval, showCodexNotifyBubble, clearCodexNotifyBubbles, showKimiNotifyBubble, clearKimiNotifyBubbles, showReminderBubble, syncPermissionShortcuts, replyOpencodePermission } = _perm;
 const pendingPermissions = _perm.pendingPermissions;
 let permDebugLog = null; // set after app.whenReady()
 let updateDebugLog = null; // set after app.whenReady()
@@ -1424,6 +1426,17 @@ const { setState, applyState, updateSession, resolveDisplayState, getSvgOverride
         enableDoNotDisturb, disableDoNotDisturb, startStaleCleanup, stopStaleCleanup,
         startWakePoll, stopWakePoll, detectRunningAgentProcesses,
         startStartupRecovery: _startStartupRecovery } = _state;
+
+timerRuntime = createTimerRuntime({
+  onReminder: (reminder) => {
+    setState("notification");
+    playSound("confirm");
+    const msg = reminder.type === "timer"
+      ? translate("reminderTimeUp") + ` (${reminder.minutes}m)`
+      : translate("reminderTimeUp") + ` (${reminder.time})`;
+    showReminderBubble({ sessionId: "reminder-" + Date.now(), message: msg });
+  }
+});
 const sessions = _state.sessions;
 
 // ── Keep-awake: block OS sleep while any agent task is in progress ──
@@ -2800,6 +2813,128 @@ function showResumeInput(t) {
   });
 }
 
+function showTimerInputDialog(t) {
+  return new Promise((resolve) => {
+    const scale = getTextScaleForPetWindows();
+    const inputWin = new BrowserWindow({
+      width: scaleWidth(420, scale),
+      height: scaleHeight(180, scale),
+      resizable: false,
+      alwaysOnTop: true,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      parent: win && !win.isDestroyed() ? win : undefined,
+      modal: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+    const title = t("setTimerTitle") || "Set Timer";
+    const hint = t("setTimerHint") || "Minutes (e.g. 25)";
+    const confirmLabel = t("confirm") || "OK";
+    const cancelLabel = t("dismiss") || "Cancel";
+    const html = `<!DOCTYPE html><html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{zoom:${scale};font-family:system-ui,-apple-system,sans-serif;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;height:calc(100vh / ${scale});padding:16px;border-radius:12px;overflow:hidden}
+      .title{font-size:14px;font-weight:600;margin-bottom:12px}
+      input{width:100%;padding:8px 12px;border:1px solid #45475a;border-radius:6px;background:#313244;color:#cdd6f4;font-size:13px;outline:none}
+      input:focus{border-color:#89b4fa}
+      input::placeholder{color:#6c7086}
+      .btns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+      button{padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer}
+      .ok{background:#89b4fa;color:#1e1e2e;font-weight:600}
+      .cancel{background:#45475a;color:#cdd6f4}
+    </style></head><body>
+      <div class="title">${title}</div>
+      <input id="val" type="number" step="1" min="1" placeholder="${hint}" autofocus />
+      <div class="btns">
+        <button class="cancel" onclick="result(null)">${cancelLabel}</button>
+        <button class="ok" onclick="result(document.getElementById('val').value)">${confirmLabel}</button>
+      </div>
+      <script>
+        function result(v){window._resolve(v)}
+        document.getElementById('val').addEventListener('keydown',e=>{
+          if(e.key==='Enter')result(document.getElementById('val').value);
+          if(e.key==='Escape')result(null);
+        });
+      </script>
+    </body></html>`;
+    inputWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    inputWin.webContents.on("did-finish-load", () => {
+      inputWin.webContents.executeJavaScript(
+        "new Promise(r=>{window._resolve=r})"
+      ).then((val) => {
+        const minutes = parseInt(val, 10);
+        resolve(isNaN(minutes) || minutes <= 0 ? null : minutes);
+        try { inputWin.close(); } catch {}
+      });
+    });
+    inputWin.on("closed", () => resolve(null));
+  });
+}
+
+function showAlarmInputDialog(t) {
+  return new Promise((resolve) => {
+    const scale = getTextScaleForPetWindows();
+    const inputWin = new BrowserWindow({
+      width: scaleWidth(420, scale),
+      height: scaleHeight(180, scale),
+      resizable: false,
+      alwaysOnTop: true,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      parent: win && !win.isDestroyed() ? win : undefined,
+      modal: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+    const title = t("setAlarmTitle") || "Set Alarm";
+    const hint = t("setAlarmHint") || "Time (HH:mm, e.g. 15:30)";
+    const confirmLabel = t("confirm") || "OK";
+    const cancelLabel = t("dismiss") || "Cancel";
+    const html = `<!DOCTYPE html><html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{zoom:${scale};font-family:system-ui,-apple-system,sans-serif;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;height:calc(100vh / ${scale});padding:16px;border-radius:12px;overflow:hidden}
+      .title{font-size:14px;font-weight:600;margin-bottom:12px}
+      input{width:100%;padding:8px 12px;border:1px solid #45475a;border-radius:6px;background:#313244;color:#cdd6f4;font-size:13px;outline:none}
+      input:focus{border-color:#89b4fa}
+      input::placeholder{color:#6c7086}
+      .btns{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+      button{padding:6px 16px;border:none;border-radius:6px;font-size:12px;cursor:pointer}
+      .ok{background:#89b4fa;color:#1e1e2e;font-weight:600}
+      .cancel{background:#45475a;color:#cdd6f4}
+    </style></head><body>
+      <div class="title">${title}</div>
+      <input id="val" type="text" placeholder="${hint}" autofocus />
+      <div class="btns">
+        <button class="cancel" onclick="result(null)">${cancelLabel}</button>
+        <button class="ok" onclick="result(document.getElementById('val').value)">${confirmLabel}</button>
+      </div>
+      <script>
+        function result(v){window._resolve(v)}
+        document.getElementById('val').addEventListener('keydown',e=>{
+          if(e.key==='Enter')result(document.getElementById('val').value);
+          if(e.key==='Escape')result(null);
+        });
+      </script>
+    </body></html>`;
+    inputWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    inputWin.webContents.on("did-finish-load", () => {
+      inputWin.webContents.executeJavaScript(
+        "new Promise(r=>{window._resolve=r})"
+      ).then((val) => {
+        const timeStr = typeof val === "string" ? val.trim() : "";
+        if (/^\d{1,2}:\d{2}$/.test(timeStr)) {
+          resolve(timeStr);
+        } else {
+          resolve(null);
+        }
+        try { inputWin.close(); } catch {}
+      });
+    });
+    inputWin.on("closed", () => resolve(null));
+  });
+}
+
 const _menuCtx = {
   get win() { return win; },
   get sessions() { return sessions; },
@@ -2933,6 +3068,18 @@ const _menuCtx = {
     if (mode.response === 1 && !(await confirmDangerousMode(t))) return;
     const modes = ["normal", "dangerous", "continue"];
     await runLaunchClaudeSession(t, modes[mode.response]);
+  },
+  addTimerViaMenu: async (t) => {
+    const minutes = await showTimerInputDialog(t);
+    if (minutes && timerRuntime) {
+      timerRuntime.addTimer(minutes);
+    }
+  },
+  addAlarmViaMenu: async (t) => {
+    const timeStr = await showAlarmInputDialog(t);
+    if (timeStr && timerRuntime) {
+      timerRuntime.addAlarm(timeStr);
+    }
   },
   // The settings controller is the only writer of persisted prefs. Toggle
   // setters above route through it; resize/sendToDisplay use
@@ -3762,6 +3909,7 @@ if (!gotTheLock) {
       unsubscribeHardwareBuddySettings = null;
     }
     if (hardwareBuddyAdapter) hardwareBuddyAdapter.stop();
+    if (timerRuntime) timerRuntime.cleanup();
     _perm.cleanup();
     _server.cleanup();
     if (_lanWss) _lanWss.cleanup();
